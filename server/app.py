@@ -19,10 +19,59 @@ db.init_app(app)
 
 api = Api(app)
 
+class Restaurants(Resource):
+    def get(self):
+        restaurants = [restaurant.to_dict(only=('id', 'name', 'address')) 
+                      for restaurant in Restaurant.query.all()]
+        return restaurants, 200
 
-@app.route("/")
-def index():
-    return "<h1>Code challenge</h1>"
+class RestaurantByID(Resource):
+    def get(self, id):
+        restaurant = Restaurant.query.filter_by(id=id).first()
+        if not restaurant:
+            return {"error": "Restaurant not found"}, 404
+        return restaurant.to_dict(rules=('-restaurant_pizzas.restaurant',)), 200
+
+    def delete(self, id):
+        restaurant = Restaurant.query.filter_by(id=id).first()
+        if not restaurant:
+            return {"error": "Restaurant not found"}, 404
+        
+        db.session.delete(restaurant)
+        db.session.commit()
+        return "", 204
+
+class Pizzas(Resource):
+    def get(self):
+        pizzas = [pizza.to_dict(only=('id', 'name', 'ingredients')) 
+                 for pizza in Pizza.query.all()]
+        return pizzas, 200
+
+class RestaurantPizzas(Resource):
+    def post(self):
+        data = request.get_json()
+        
+        try:
+            new_restaurant_pizza = RestaurantPizza(
+                price=data['price'],
+                pizza_id=data['pizza_id'],
+                restaurant_id=data['restaurant_id']
+            )
+            db.session.add(new_restaurant_pizza)
+            db.session.commit()
+            
+            return new_restaurant_pizza.to_dict(
+                rules=('-restaurant.restaurant_pizzas', '-pizza.restaurant_pizzas')
+            ), 201
+            
+        except (ValueError, Exception):
+            return {"errors": ["validation errors"]}, 400
+
+# Add routes to the API
+api.add_resource(Restaurants, '/restaurants')
+api.add_resource(RestaurantByID, '/restaurants/<int:id>')
+api.add_resource(Pizzas, '/pizzas')
+api.add_resource(RestaurantPizzas, '/restaurant_pizzas')
 
 
 if __name__ == "__main__":
